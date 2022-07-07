@@ -25,6 +25,10 @@ import (
 	"strings"
 	"time"
 
+	pb "git.basebit.me/xss/tpm/tpm_attest/attestation"
+	"git.basebit.me/xss/tpm/tpm_attest/attestor"
+	"git.basebit.me/xss/tpm/tpm_attest/tpm"
+	"google.golang.org/grpc"
 	v1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -83,7 +87,23 @@ func (kl *Kubelet) registerWithAPIServer() {
 // value of the annotation for controller-managed attach-detach of attachable
 // persistent volumes for the node.
 func (kl *Kubelet) tryRegisterWithAPIServer(node *v1.Node) bool {
-	_, err := kl.kubeClient.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
+	tpm.InitTPM()
+	defer tpm.CLoseTPM()
+	lis, err := net.Listen("tcp", ":50051")
+	fmt.Println("Nodename:" + node.Name)
+	if err != nil {
+		klog.ErrorS(err, "Unable to register node with API server,TPM err opening grpc server", "node", klog.KObj(node))
+	}
+	s := grpc.NewServer()
+	pb.RegisterAttestationServer(s, &attestor.Server{})
+	defer s.Stop()
+	go func() {
+		if err := s.Serve(lis); err != nil {
+			klog.ErrorS(err, "Unable to register node with API server,TPM err gRPC server listen", "node", klog.KObj(node))
+		}
+
+	}()
+	_, err = kl.kubeClient.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
 	if err == nil {
 		return true
 	}

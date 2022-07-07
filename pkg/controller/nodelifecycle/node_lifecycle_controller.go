@@ -23,12 +23,17 @@ package nodelifecycle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/klog/v2"
 
+	pb "git.basebit.me/xss/tpm/tpm_attest/attestation"
+	"git.basebit.me/xss/tpm/tpm_attest/verifier"
 	coordv1 "k8s.io/api/coordination/v1"
 	v1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -501,6 +506,23 @@ func NewNodeLifecycleController(
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controllerutil.CreateAddNodeHandler(func(node *v1.Node) error {
 			nc.nodeUpdateQueue.Add(node.Name)
+			addr := node.Name + ":50051"
+			rootCA := "rootCA.crt"
+			fmt.Println("Nodename :" + node.Name)
+			conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				return err
+			}
+			defer conn.Close()
+			client := pb.NewAttestationClient(conn)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+
+			akPub, _ := verifier.AttestAK(client, ctx, (*string)(&node.UID), rootCA)
+
+			if result, _ := verifier.VerifyQuote(akPub, client, ctx, (*string)(&node.UID)); result {
+				return errors.New("node quote is invalid")
+			}
 			nc.nodeEvictionMap.registerNode(node.Name)
 			return nil
 		}),

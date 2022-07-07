@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package attestation;
+
+option go_package = "/home/jaco/work/tpm_attest/attestation";
+
+service Attestation{
+    rpc GetCerts(GetCertsRequest) returns (GetCertsResponse) {}
+    rpc GetAK(GetAKRequest) returns(GetAKResponse){}
+    rpc Challenge(ChallengeRequest) returns(ChallengeResponse){}
+    rpc GetQuote(GetQuoteRequest) returns(GetQuoteResponse){}
+    rpc ShareSecret(ShareSecretRequest) returns(ShareSecretResponse){}
+}
+
+message GetCertsRequest {
+    string uid = 1;
+}
+
+message GetCertsResponse {
+    string uid = 1;
+    bytes platformCert = 2;
+    bytes ekCert = 3;
+    bytes ekPub = 4;
+}
+
+message GetAKRequest{
+    string uid = 1;
+}
+
+message AK{
+    bytes akPub = 1;
+    bool tcsd = 2;
+    bytes createData = 3;
+    bytes createAttestation = 4;
+    bytes createSignature = 5;
+}
+message GetAKResponse{
+    string uid = 1;
+    bytes ekPub = 2;
+    AK ak = 3;
+}
+message ChallengeRequest{
+    string uid = 1;
+    bytes credential = 2;
+    bytes secret = 3;
+}
+message ChallengeResponse{
+    string uid = 1;
+    bytes secret = 2;
+}
+
+message EncryptKeyRequest{
+    string uid = 1;
+    bytes pubKey = 2;
+
+}
+message GetQuoteRequest{
+    string uid=1;
+    bytes nonce=2;
+}
+
+message Quote{
+    uint32 tpmVersion=1;
+    bytes quote=2;
+    bytes signature=3;
+}
+message PCR{
+    int32 index=1;
+    bytes digest=2;
+    uint32 digestAlg=3;
+}
+message GetQuoteResponse{
+    string uid=1;
+    uint32 tpmVersion=2;
+    bytes public=3;
+    repeated Quote quotes=4;
+    repeated PCR pcrs=5;
+    bytes eventLog=6;
+}
+
+message ShareSecretRequest{
+    string uid=1;
+    bytes encryptedKey=2;
+}
+
+message ShareSecretResponse{
+    string uid=1;
+    bytes message=2;
+    bytes cipher=3;
+}
